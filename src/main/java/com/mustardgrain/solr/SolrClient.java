@@ -381,7 +381,7 @@ public class SolrClient extends SolrServer {
     startAliveCheckExecutor();
     
     if (LOG.isWarnEnabled())
-        LOG.warn("Marking server " + wrapper.solrServer.getBaseURL() + " inactive; cause: " + e.getMessage(), e);
+      LOG.warn("Marking server " + wrapper.solrServer.getBaseURL() + " inactive - " + getNestedErrorMessages(e));
 
     return e;
   }  
@@ -595,7 +595,7 @@ public class SolrClient extends SolrServer {
       zombieServer.failedPings++;
 
       if (LOG.isWarnEnabled())
-          LOG.warn("Server " + zombieServer.solrServer.getBaseURL() + " still inactive after " + zombieServer.failedPings + " checks", e);
+        LOG.warn("Server " + zombieServer.solrServer.getBaseURL() + " still inactive after " + zombieServer.failedPings + " checks - " + getNestedErrorMessages(e));
       
       // If the server doesn't belong in the standard set belonging to this load balancer
       // then simply drop it after a certain number of failed pings.
@@ -613,7 +613,7 @@ public class SolrClient extends SolrServer {
     startAliveCheckExecutor();
     
     if (LOG.isWarnEnabled())
-        LOG.warn("Marking server " + wrapper.solrServer.getBaseURL() + " inactive; cause: " + t.getMessage(), t);
+      LOG.warn("Marking server " + wrapper.solrServer.getBaseURL() + " inactive - " + getNestedErrorMessages(t));
   }
 
   private int interval = CHECK_INTERVAL;
@@ -778,7 +778,7 @@ public class SolrClient extends SolrServer {
       stats.httpFailures.incrementAndGet(); // Non 2xx HTTP return codes
     
     if (LOG.isWarnEnabled())
-      LOG.warn(error, error);
+      LOG.warn(getNestedErrorMessages(error));
   }
 
   private void updateStatsEmptyResults(HttpSolrServer server) {
@@ -801,6 +801,20 @@ public class SolrClient extends SolrServer {
 
   public Map<String, Stats> getStats() {
     return new HashMap<String, Stats>(serverStats);
+  }
+  
+  private String getNestedErrorMessages(Throwable t) {
+    StringBuilder sb = new StringBuilder();
+      
+    while (t != null) {
+      if (sb.length() > 0)
+        sb.append("; caused by: ");
+            
+      sb.append(t.getMessage());
+      t = t.getCause();
+    }
+    
+    return sb.toString();
   }
   
   public class Stats {
