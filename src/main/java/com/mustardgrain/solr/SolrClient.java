@@ -337,6 +337,16 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
         });
     }
 
+    public void disableConnectonHeader() {
+        ((AbstractHttpClient) httpClient).addRequestInterceptor(new HttpRequestInterceptor() {
+
+            @Override
+            public void process(HttpRequest request, HttpContext context) throws HttpException, IOException {
+                request.removeHeaders("Connection");
+            }
+        });
+    }
+
     /**
      * Tries to query a live server from the list provided in Req. Servers in
      * the dead pool are skipped. If a request fails due to an IOException, the
