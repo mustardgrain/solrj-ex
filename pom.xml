@@ -4,7 +4,7 @@
   <groupId>com.mustardgrain.solr</groupId>
   <artifactId>solrj-ex</artifactId>
   <packaging>jar</packaging>
-  <version>1.0-alpha3</version>
+  <version>1.0-alpha4</version>
   <name>SolrJ client based off of LBHttpSolrServer</name>
   <dependencies>
     <dependency>

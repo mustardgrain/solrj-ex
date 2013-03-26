@@ -33,7 +33,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.management.MBeanServer;
+import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -79,24 +83,6 @@ import org.apache.solr.common.util.SolrjNamedThreadFactory;
  * server is alive, the request succeeds, and if not it fails. <blockquote>
  * 
  * <pre>
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
- * 
  * 
  * SolrServer lbHttpSolrServer = new SolrClient(&quot;http://host1:8080/solr/&quot;,
  *                                              &quot;http://host2:8080/solr&quot;,
@@ -828,7 +814,7 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
                 if (lb != null && lb.serverStats != null && LOG.isInfoEnabled()) {
                     StringBuilder sb = new StringBuilder();
                     sb.append("server responses over past " + TimeUnit.MILLISECONDS.toMinutes(lb.statsInterval)
-                              + " mins (good/timeout/zero found): ");
+                              + " mins (good/timeout/zero found) and cache hit ratio: ");
                     boolean appendComma = false;
 
                     for (Map.Entry<String, SolrStats> entry : lb.serverStats.entrySet()) {
@@ -837,13 +823,17 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
 
                         String server = entry.getKey();
                         SolrStats stats = entry.getValue();
+                        String hitRatio = getHitRatio(server);
 
-                        sb.append(server + ": "
-                                  + stats.getSuccesses()
-                                  + "/"
-                                  + stats.getReadTimeouts()
-                                  + "/"
-                                  + stats.getEmptyResults());
+                        sb.append(server);
+                        sb.append(": ");
+                        sb.append(stats.getSuccesses());
+                        sb.append("/");
+                        sb.append(stats.getReadTimeouts());
+                        sb.append("/");
+                        sb.append(stats.getEmptyResults());
+                        sb.append(" ");
+                        sb.append(hitRatio);
 
                         appendComma = true;
 
@@ -853,6 +843,46 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
                     LOG.info(sb);
                 }
             }
+
+            private String getHitRatio(String server) {
+                String hitRatio = "n/a";
+                JMXConnector jmxc = null;
+
+                try {
+                    URL url = new URL(server);
+                    String domain = url.getPath();
+
+                    if (domain.startsWith("/"))
+                        domain = domain.substring(1);
+
+                    ObjectName name = new ObjectName(domain + ":id=org.apache.solr.search.LRUCache,type=queryResultCache");
+                    JMXServiceURL jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://" + url.getHost()
+                                                             + ":7199/jmxrmi");
+
+                    LOG.info(url);
+                    LOG.info(jmxUrl);
+                    LOG.info(name);
+
+                    jmxc = JMXConnectorFactory.connect(jmxUrl, null);
+                    MBeanServerConnection con = jmxc.getMBeanServerConnection();
+
+                    Object result = con.getAttribute(name, "hitratio");
+                    hitRatio = (int) (Float.parseFloat(String.valueOf(result)) * 100.0f) + "%";
+                } catch (Exception e) {
+                    LOG.error(getNestedErrorMessages(e));
+                } finally {
+                    if (jmxc != null) {
+                        try {
+                            jmxc.close();
+                        } catch (Exception e) {
+                            LOG.error(getNestedErrorMessages(e));
+                        }
+                    }
+                }
+
+                return hitRatio;
+            }
+
         };
     }
 
@@ -961,7 +991,7 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
         return ret;
     }
 
-    private String getNestedErrorMessages(Throwable t) {
+    private static String getNestedErrorMessages(Throwable t) {
         StringBuilder sb = new StringBuilder();
 
         while (t != null) {
