@@ -858,11 +858,6 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
                     ObjectName name = new ObjectName(domain + ":id=org.apache.solr.search.LRUCache,type=queryResultCache");
                     JMXServiceURL jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://" + url.getHost()
                                                              + ":7199/jmxrmi");
-
-                    LOG.info(url);
-                    LOG.info(jmxUrl);
-                    LOG.info(name);
-
                     jmxc = JMXConnectorFactory.connect(jmxUrl, null);
                     MBeanServerConnection con = jmxc.getMBeanServerConnection();
 
