@@ -84,6 +84,11 @@ import org.apache.solr.common.util.SolrjNamedThreadFactory;
  * 
  * <pre>
  * 
+ * 
+ * 
+ * 
+ * 
+ * 
  * SolrServer lbHttpSolrServer = new SolrClient(&quot;http://host1:8080/solr/&quot;,
  *                                              &quot;http://host2:8080/solr&quot;,
  *                                              &quot;http://host2:8080/solr&quot;);
@@ -113,6 +118,8 @@ import org.apache.solr.common.util.SolrjNamedThreadFactory;
  */
 public class SolrClient extends SolrServer implements SolrClientMBean {
 
+    private final static AtomicInteger objectNameIdCounter = new AtomicInteger();
+
     // keys to the maps are currently of the form "http://localhost:8983/solr"
     // which should be equivalent to CommonsHttpSolrServer.getBaseURL()
     private final Map<String, ServerWrapper> aliveServers = new LinkedHashMap<String, ServerWrapper>();
@@ -140,6 +147,8 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
     private static final SolrQuery solrQuery = new SolrQuery("*:*");
 
     private final ResponseParser parser;
+
+    private ObjectName objectName;
 
     private static final Log LOG = LogFactory.getLog(SolrClient.class);
 
@@ -280,11 +289,19 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
     }
 
     private void registerMBean() {
-        String name = getClass().getPackage().getName() + ":type=" + getClass().getSimpleName();
+        String name = getClass().getPackage().getName() + ":type="
+                      + getClass().getSimpleName()
+                      + "-"
+                      + objectNameIdCounter.incrementAndGet();
 
         try {
+            objectName = new ObjectName(name);
+            name = objectName.toString();
             MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
             mbs.registerMBean(this, new ObjectName(name));
+
+            if (LOG.isInfoEnabled())
+                LOG.info("Registered " + objectName);
         } catch (Exception e) {
             if (LOG.isWarnEnabled())
                 LOG.warn("Couldn't add MBean " + name);
@@ -292,14 +309,18 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
     }
 
     private void unregisterMBean() {
-        String name = getClass().getPackage().getName() + ":type=" + getClass().getSimpleName();
+        if (objectName == null)
+            return;
 
         try {
             MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-            mbs.unregisterMBean(new ObjectName(name));
+            mbs.unregisterMBean(objectName);
+
+            if (LOG.isInfoEnabled())
+                LOG.info("Unregistered " + objectName);
         } catch (Exception e) {
             if (LOG.isWarnEnabled())
-                LOG.warn("Couldn't remove MBean " + name);
+                LOG.warn("Couldn't remove MBean " + objectName.toString());
         }
     }
 

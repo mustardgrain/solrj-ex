@@ -4,7 +4,7 @@
   <groupId>com.mustardgrain.solr</groupId>
   <artifactId>solrj-ex</artifactId>
   <packaging>jar</packaging>
-  <version>1.0-alpha4</version>
+  <version>1.0-alpha5</version>
   <name>SolrJ client based off of LBHttpSolrServer</name>
   <dependencies>
     <dependency>
@@ -21,6 +21,16 @@
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpmime</artifactId>
       <version>4.2.1</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-pool</groupId>
+      <artifactId>commons-pool</artifactId>
+      <version>1.6</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-lang</groupId>
+      <artifactId>commons-lang</artifactId>
+      <version>2.4</version>
     </dependency>
     <dependency>
       <groupId>log4j</groupId>
