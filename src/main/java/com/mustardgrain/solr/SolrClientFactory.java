@@ -9,6 +9,11 @@ import org.apache.http.params.CoreConnectionPNames;
 import org.apache.http.params.HttpParams;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 
+/**
+ * SolrClientFactory is the factory for generating SolrClient instance. Used
+ * primarily within the Apache Commons pooling logic.
+ */
+
 public class SolrClientFactory implements PoolableObjectFactory<SolrClient> {
 
     private final String version;
@@ -27,6 +32,28 @@ public class SolrClientFactory implements PoolableObjectFactory<SolrClient> {
 
     private final boolean disableConnectonHeader;
 
+    /**
+     * Creates a new SolrClientFactory.
+     * 
+     * @param version Version string, or null to use default ("n/a")
+     * @param userAgent User agent string, or null to use default
+     *        ("<local host name>:<version>")
+     * @param urls List of one or more Solr URLs
+     * @param connectTimeout Timeout (in milliseconds) for underlying socket
+     *        connection, or -1 to use {@link SolrClient} default
+     * @param soTimeout Timeout (in milliseconds) for underlying socket reads,
+     *        or -1 to use {@link SolrClient} default
+     * @param staleConnectionCheck Set to true to cause the Apache Commons HTTP
+     *        code to perform stale connection checks, or false to omit the
+     *        checks for a (minor) performance increase
+     * @param statsInterval Interval (in milliseconds) between statistics
+     *        logging, or -1 to use default (5 minutes)
+     * @param disableConnectonHeader Set to true to suppress output of the
+     *        "Connection" header on HTTP requests as these are unneeded for
+     *        HTTP 1.1 communication
+     * @see SolrServerPool#SolrServerPool(PoolableObjectFactory)
+     */
+
     public SolrClientFactory(String version,
                              String userAgent,
                              List<String> urls,
@@ -35,6 +62,12 @@ public class SolrClientFactory implements PoolableObjectFactory<SolrClient> {
                              boolean staleConnectionCheck,
                              int statsInterval,
                              boolean disableConnectonHeader) {
+        if (urls == null)
+            throw new IllegalArgumentException("List of Solr URLs cannot be null");
+
+        if (urls.isEmpty())
+            throw new IllegalArgumentException("List of Solr URLs cannot be empty");
+
         this.version = version;
         this.userAgent = userAgent;
         this.urls = urls;

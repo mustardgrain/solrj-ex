@@ -1,16 +1,20 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with this
- * work for additional information regarding copyright ownership. The ASF
- * licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * http://www.apache.org/licenses/LICENSE-2.0 Unless required by applicable law
- * or agreed to in writing, software distributed under the License is
- * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the specific language
- * governing permissions and limitations under the License.
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 package com.mustardgrain.solr;
 
 import java.io.IOException;
@@ -56,6 +60,7 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.client.solrj.impl.HttpSolrServer;
+import org.apache.solr.client.solrj.impl.LBHttpSolrServer;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
@@ -65,59 +70,12 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SolrjNamedThreadFactory;
 
 /**
- * SolrClient or "LoadBalanced HttpSolrServer" is a load balancing wrapper
- * around {@link org.apache.solr.client.solrj.impl.HttpSolrServer}. This is
- * useful when you have multiple SolrServers and the requests need to be Load
- * Balanced among them. This should <b>NOT</b> be used for indexing. Also see
- * the <a href="http://wiki.apache.org/solr/SolrClient">wiki</a> page.
- * <p/>
- * It offers automatic failover when a server goes down and it detects when the
- * server comes back up.
- * <p/>
- * Load balancing is done using a simple round-robin on the list of servers.
- * <p/>
- * If a request to a server fails by an IOException due to a connection timeout
- * or read timeout then the host is taken off the list of live servers and moved
- * to a 'dead server list' and the request is resent to the next live server.
- * This process is continued till it tries all the live servers. If atleast one
- * server is alive, the request succeeds, and if not it fails. <blockquote>
- * 
- * <pre>
- * 
- * 
- * 
- * 
- * 
- * 
- * SolrServer lbHttpSolrServer = new SolrClient(&quot;http://host1:8080/solr/&quot;,
- *                                              &quot;http://host2:8080/solr&quot;,
- *                                              &quot;http://host2:8080/solr&quot;);
- * 
- * // or if you wish to pass the HttpClient do as follows
- * httpClient httpClient = new HttpClient();
- * 
- * SolrServer lbHttpSolrServer = new SolrClient(httpClient,
- *                                              &quot;http://host1:8080/solr/&quot;,
- *                                              &quot;http://host2:8080/solr&quot;,
- *                                              &quot;http://host2:8080/solr&quot;);
- * </pre>
- * 
- * </blockquote> This detects if a dead server comes alive automatically. The
- * check is done in fixed intervals in a dedicated thread. This interval can be
- * set using {@link #setAliveCheckInterval} , the default is set to one minute.
- * <p/>
- * <b>When to use this?</b><br/>
- * This can be used as a software load balancer when you do not wish to setup an
- * external load balancer. Alternatives to this code are to use a dedicated
- * hardware load balancer or using Apache httpd with mod_proxy_balancer as a
- * load balancer. See <a
- * href="http://en.wikipedia.org/wiki/Load_balancing_(computing)">Load balancing
- * on Wikipedia</a>
- * 
- * @since solr 1.4
+ * SolrClient provides some extensions to {@link LBHttpSolrServer}.
  */
 public class SolrClient extends SolrServer implements SolrClientMBean {
 
+    // We assume a pool of SolrClient instances may be used, so give each a
+    // unique means of identification in JMX
     private final static AtomicInteger objectNameIdCounter = new AtomicInteger();
 
     // keys to the maps are currently of the form "http://localhost:8983/solr"
@@ -334,6 +292,16 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
         return new HttpSolrServer(server, httpClient, parser);
     }
 
+    /**
+     * This customization/hack circumvents Solr's hard-coding of the User-Agent
+     * header. We actually intercept each HTTP request and force the header to
+     * our desired string. This was done because we don't want to have to fork
+     * and change HttpSolrServer too.
+     * 
+     * @param userAgent User agent string
+     * @see HttpSolrServer#AGENT
+     */
+    
     public void setUserAgent(final String userAgent) {
         ((AbstractHttpClient) httpClient).addRequestInterceptor(new HttpRequestInterceptor() {
 
@@ -344,6 +312,12 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
         });
     }
 
+    /**
+     * Calling this method creates a hook in the HTTP request pipeline that
+     * suppresses the Connection header from being output to "Keep-alive" since
+     * we're using HTTP 1.1 in which that is superfluous.
+     */
+    
     public void disableConnectonHeader() {
         ((AbstractHttpClient) httpClient).addRequestInterceptor(new HttpRequestInterceptor() {
 
@@ -834,8 +808,9 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
                 SolrClient lb = lbRef.get();
                 if (lb != null && lb.serverStats != null && LOG.isInfoEnabled()) {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("server responses over past " + TimeUnit.MILLISECONDS.toMinutes(lb.statsInterval)
-                              + " mins (good/timeout/zero found) and cache hit ratio: ");
+                    sb.append("server responses over past ");
+                    sb.append(TimeUnit.MILLISECONDS.toMinutes(lb.statsInterval));
+                    sb.append(" mins (good/timeout/zero found) and cache hit ratio: ");
                     boolean appendComma = false;
 
                     for (Map.Entry<String, SolrStats> entry : lb.serverStats.entrySet()) {
@@ -865,6 +840,14 @@ public class SolrClient extends SolrServer implements SolrClientMBean {
                 }
             }
 
+            /**
+             * Determines the hit ratio for the query result cache by calling
+             * the SolrServer via JMX and reading its MBean containing that
+             * information.
+             * @param server Server from which to pull information
+             * @return String form of hit ratio (either "n/a" or "xx%")
+             */
+            
             private String getHitRatio(String server) {
                 String hitRatio = "n/a";
                 JMXConnector jmxc = null;
